@@ -59,19 +59,19 @@ class ValueEvaluatorSpec extends FlatSpec with Matchers {
     def append(params: Seq[Try[WdlType]]): Try[WdlType] = Success(WdlStringType)
   }
 
-  def constEval(exprStr: String): WdlPrimitive = expr(exprStr).evaluate(noLookup, new TestValueFunctions()).asInstanceOf[Try[WdlPrimitive]].get
-  def constEvalType(exprStr: String): WdlType = expr(exprStr).evaluateType(identifierTypeLookup, new TestTypeFunctions).asInstanceOf[Try[WdlType]].get
+  def constEval(exprStr: String): WdlValue = expr(exprStr).evaluate(noLookup, new TestValueFunctions()).get
+  def constEvalType(exprStr: String): WdlType = expr(exprStr).evaluateType(identifierTypeLookup, new TestTypeFunctions).get
   def constEvalError(exprStr: String): Unit = {
-    expr(exprStr).evaluate(noLookup, new TestValueFunctions()).asInstanceOf[Try[WdlPrimitive]] match {
+    expr(exprStr).evaluate(noLookup, new TestValueFunctions()) match {
       case Failure(ex) => // Expected
-      case Success(value) => fail(s"Operation was supposed to fail, instead I got value: $value")
+      case Success(wdlValue) => fail(s"Operation was supposed to fail, instead I got value: $wdlValue")
     }
   }
   def identifierEval(exprStr: String): WdlPrimitive = expr(exprStr).evaluate(identifierLookup, new TestValueFunctions()).asInstanceOf[Try[WdlPrimitive]].get
   def identifierEvalError(exprStr: String): Unit = {
     expr(exprStr).evaluate(identifierLookup, new TestValueFunctions()).asInstanceOf[Try[WdlPrimitive]] match {
       case Failure(ex) => // Expected
-      case Success(value) => fail(s"Operation was supposed to fail, instead I got value: $value")
+      case Success(wdlPrimitive) => fail(s"Operation was supposed to fail, instead I got value: $wdlPrimitive")
     }
   }
 
@@ -168,6 +168,52 @@ class ValueEvaluatorSpec extends FlatSpec with Matchers {
     (""" "abc" > "def" """, WdlBoolean.False),
     (""" "abc" >= "def" """, WdlBoolean.False),
 
+    // Arrays
+    (""" ["a", "b"] + ["c", "d"] """,
+      WdlArray(
+        WdlArrayType(WdlStringType),
+        Seq(
+          WdlString("a"),
+          WdlString("b"),
+          WdlString("c"),
+          WdlString("d")
+        )
+      )
+    ),
+    (""" [1, 2] + [3] """,
+      WdlArray(
+        WdlArrayType(WdlIntegerType),
+        Seq(
+          WdlInteger(1),
+          WdlInteger(2),
+          WdlInteger(3)
+        )
+      )
+    ),
+    (""" [[1, 2], [3]] + [[3, 4]] """,
+      WdlArray(
+        WdlArrayType(WdlArrayType(WdlIntegerType)),
+        Seq(
+          WdlArray(WdlArrayType(WdlIntegerType), Seq(WdlInteger(1), WdlInteger(2))),
+          WdlArray(WdlArrayType(WdlIntegerType), Seq(WdlInteger(3))),
+          WdlArray(WdlArrayType(WdlIntegerType), Seq(WdlInteger(3), WdlInteger(4)))
+        )
+      )
+     ),
+    (""" [{"a": 1, "b": 2}, {"c": 3}] + [{"d": 4, "e": 5}] """,
+      WdlArray(
+        WdlArrayType(WdlMapType(WdlStringType, WdlIntegerType)),
+        Seq(
+          WdlMap(WdlMapType(WdlStringType, WdlIntegerType),
+            Map(WdlString("a") -> WdlInteger(1), WdlString("b") -> WdlInteger(2))),
+          WdlMap(WdlMapType(WdlStringType, WdlIntegerType),
+            Map(WdlString("c") -> WdlInteger(3))),
+          WdlMap(WdlMapType(WdlStringType, WdlIntegerType),
+            Map(WdlString("d") -> WdlInteger(4), WdlString("e") -> WdlInteger(5)))
+        )
+       )
+    ),
+
     // Order of Operations
     ("1+2*3", WdlInteger(7)),
     ("1+2==3", WdlBoolean.True),
@@ -175,114 +221,122 @@ class ValueEvaluatorSpec extends FlatSpec with Matchers {
   )
 
   val badExpressions = Table(
-    ("expression"),
+    "expression",
 
     // Integers
-    ("1+true"),
-    ("1-true"),
-    (""" 1-"s"  """),
-    ("1*true"),
-    (""" 1*"s"  """),
-    ("1 / 0"),
-    ("1 / 0.0"),
-    ("25/0.0"),
-    ("1/true"),
-    (""" 1/"s"  """),
-    ("1%false"),
-    (""" 1%"s"  """),
-    ("1%0"),
-    (" 24 == false "),
-    (""" 1 == "s"  """),
-    (" 24 != false "),
-    (""" 1 != "s"  """),
-    (" 24 < false "),
-    (""" 1 < "s"  """),
-    (" 24 <= false "),
-    (""" 1 <= "s"  """),
-    ("4 > false"),
-    (""" 1 > "s"  """),
-    ("4 >= false"),
-    (""" 1 >= "s"  """),
+    "1+true",
+    "1-true",
+    """ 1-"s"  """,
+    "1*true",
+    """ 1*"s"  """,
+    "1 / 0",
+    "1 / 0.0",
+    "25/0.0",
+    "1/true",
+    """ 1/"s"  """,
+    "1%false",
+    """ 1%"s"  """,
+    "1%0",
+    " 24 == false ",
+    """ 1 == "s"  """,
+    " 24 != false ",
+    """ 1 != "s"  """,
+    " 24 < false ",
+    """ 1 < "s"  """,
+    " 24 <= false ",
+    """ 1 <= "s"  """,
+    "4 > false",
+    """ 1 > "s"  """,
+    "4 >= false",
+    """ 1 >= "s"  """,
 
     // Floats
-    ("1.0+true"),
-    ("1.0-true"),
-    (""" 1.0-"s"  """),
-    ("1.0*true"),
-    (""" 1.0*"s"  """),
-    ("1.0/true"),
-    ("1.0/0.0"),
-    ("1.0/0"),
-    (""" 1.0/"s"  """),
-    ("10.0 % 0"),
-    ("10.0 % 0.0"),
-    ("1.0%false"),
-    (""" 1.0%"s"  """),
-    ("24.0 == false "),
-    (""" 1.0 == "s"  """),
-    ("24.0 != false "),
-    (""" 1.0 != "s"  """),
-    ("24.0 < false "),
-    (""" 1.0 < "s"  """),
-    ("24.0 <= false "),
-    (""" 1.0 <= "s"  """),
-    ("4.0 > false"),
-    (""" 1.0 > "s"  """),
-    ("4.0 >= false"),
-    (""" 1.0 >= "s"  """),
+    "1.0+true",
+    "1.0-true",
+    """ 1.0-"s"  """,
+    "1.0*true",
+    """ 1.0*"s"  """,
+    "1.0/true",
+    "1.0/0.0",
+    "1.0/0",
+    """ 1.0/"s"  """,
+    "10.0 % 0",
+    "10.0 % 0.0",
+    "1.0%false",
+    """ 1.0%"s"  """,
+    "24.0 == false ",
+    """ 1.0 == "s"  """,
+    "24.0 != false ",
+    """ 1.0 != "s"  """,
+    "24.0 < false ",
+    """ 1.0 < "s"  """,
+    "24.0 <= false ",
+    """ 1.0 <= "s"  """,
+    "4.0 > false",
+    """ 1.0 > "s"  """,
+    "4.0 >= false",
+    """ 1.0 >= "s"  """,
 
     // Booleans
-    (""" true + "String" """),
-    ("true+2"),
-    ("true+2.3"),
-    ("false+true"),
-    ("false-5"),
-    ("false-6.6"),
-    ("true-true"),
-    (""" true-"s"  """),
-    ("false * 7"),
-    ("false * 7.2"),
-    ("false*true"),
-    (""" false*"s"  """),
-    ("false / 4"),
-    ("false/2.0"),
-    ("false/true"),
-    (""" true/"s"  """),
-    ("true % 3"),
-    ("true % 3.5"),
-    ("false%false"),
-    (""" true % "s"  """),
-    ("true == 24 "),
-    ("true == 24.0 "),
-    ("""true == "s"  """),
-    ("true != 0 "),
-    ("true != 0.0 "),
-    ("""true != "s"  """),
-    ("true < 3"),
-    ("true < 3.0"),
-    ("true < 5.0"),
-    ("""true < "s"  """),
-    ("true <= 4"),
-    ("true <= 3.0"),
-    ("""true <= "s"  """),
-    ("true > 3"),
-    ("true > 3.0"),
-    ("true >= 4"),
-    ("true >= 4.0"),
-    ("""true >= "s"  """),
-    ("true || 4"),
-    ("true || 4.0"),
-    ("""true || "s"  """),
-    ("true && 4"),
-    ("true && 4.0"),
-    ("""true && "s"  """),
+    """ true + "String" """,
+    "true+2",
+    "true+2.3",
+    "false+true",
+    "false-5",
+    "false-6.6",
+    "true-true",
+    """ true-"s"  """,
+    "false * 7",
+    "false * 7.2",
+    "false*true",
+    """ false*"s"  """,
+    "false / 4",
+    "false/2.0",
+    "false/true",
+    """ true/"s"  """,
+    "true % 3",
+    "true % 3.5",
+    "false%false",
+    """ true % "s"  """,
+    "true == 24 ",
+    "true == 24.0 ",
+    """true == "s"  """,
+    "true != 0 ",
+    "true != 0.0 ",
+    """true != "s"  """,
+    "true < 3",
+    "true < 3.0",
+    "true < 5.0",
+    """true < "s"  """,
+    "true <= 4",
+    "true <= 3.0",
+    """true <= "s"  """,
+    "true > 3",
+    "true > 3.0",
+    "true >= 4",
+    "true >= 4.0",
+    """true >= "s"  """,
+    "true || 4",
+    "true || 4.0",
+    """true || "s"  """,
+    "true && 4",
+    "true && 4.0",
+    """true && "s"  """,
 
     // Strings
-    (""" "hello" + true """),
-    (""" "hello" == true """),
-    (""" "hello" != true """),
-    (""" "hello" < true """),
-    (""" "hello" > true """)
+    """ "hello" + true """,
+    """ "hello" == true """,
+    """ "hello" != true """,
+    """ "hello" < true """,
+    """ "hello" > true """,
+
+    // Arrays
+    """ ["a"] + "b"  """,
+    """ [1] + 2 """,
+    """ [true] + true """,
+    """ ["a"] + [2] """,
+    """ [["a"], ["b"]] + [[1], [2]] """,
+    """ [{"a": 1, "b": 2}] + [{"a": "c", "b": "d"}] """
   )
 
   val identifierLookupExpressions = Table(
@@ -335,12 +389,12 @@ class ValueEvaluatorSpec extends FlatSpec with Matchers {
   )
 
   val badIdentifierExpressions = Table(
-    ("expression"),
-    ("etc_f + 1"),
-    ("etc_f == 1"),
-    ("0.key3"),
-    ("array_str[3]"),
-    ("""map_str_int["d"]""")
+    "expression",
+    "etc_f + 1",
+    "etc_f == 1",
+    "0.key3",
+    "array_str[3]",
+    """map_str_int["d"]"""
   )
 
   forAll (constantExpressions) { (expression, value) =>

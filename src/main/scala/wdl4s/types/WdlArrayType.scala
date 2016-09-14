@@ -43,7 +43,7 @@ case class WdlArrayType(memberType: WdlType) extends WdlType {
   }
 
   override def add(rhs: WdlType): Try[WdlType] = rhs match {
-    case arrayType: WdlArrayType if arrayType.memberType == memberType => Success(this)
+    case arrayType: WdlArrayType if arrayType.memberType == memberType => Success(WdlArrayType(memberType))
     case t => invalid(s"$this $t $rhs")
   }
 }
