@@ -49,4 +49,9 @@ case class WdlArray(wdlType: WdlArrayType, value: Seq[WdlValue]) extends WdlValu
   override def collectAsSeq[T <: WdlValue](filterFn: PartialFunction[WdlValue, T]): Seq[T] = {
     value flatMap { _.collectAsSeq(filterFn) }
   }
+
+  override def add(rhs: WdlValue): Try[WdlValue] = rhs match {
+    case r:WdlArray if r.wdlType == wdlType => Success(WdlArray(wdlType, value ++ r.value))
+    case _ => invalid(s"$value + $rhs")
+  }
 }

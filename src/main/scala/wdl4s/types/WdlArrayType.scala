@@ -4,7 +4,7 @@ import wdl4s.values.{WdlArray, WdlFile, WdlString, WdlValue}
 import wdl4s.util.TryUtil
 import spray.json.JsArray
 
-import scala.util.{Failure, Success}
+import scala.util.{Try, Failure, Success}
 
 case class WdlArrayType(memberType: WdlType) extends WdlType {
   val toWdlString: String = s"Array[${memberType.toWdlString}]"
@@ -40,6 +40,11 @@ case class WdlArrayType(memberType: WdlType) extends WdlType {
   override def isCoerceableFrom(otherType: WdlType): Boolean = otherType match {
     case a: WdlArrayType => memberType.isCoerceableFrom(a.memberType)
     case _ => false
+  }
+
+  override def add(rhs: WdlType): Try[WdlType] = rhs match {
+    case arrayType: WdlArrayType if arrayType.memberType == memberType => Success(this)
+    case t => invalid(s"$this $t $rhs")
   }
 }
 
