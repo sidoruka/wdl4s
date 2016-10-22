@@ -17,9 +17,6 @@ trait WdlStandardLibraryFunctions extends WdlFunctions[WdlValue] {
   def write_tsv(params: Seq[Try[WdlValue]]): Try[WdlFile]
   def write_json(params: Seq[Try[WdlValue]]): Try[WdlFile]
   def size(params: Seq[Try[WdlValue]]): Try[WdlFloat]
-  def sub(params: Seq[Try[WdlValue]]): Try[WdlString]
-  def range(params: Seq[Try[WdlValue]]): Try[WdlArray]
-  def transpose(params: Seq[Try[WdlValue]]): Try[WdlArray]
 
   def read_objects(params: Seq[Try[WdlValue]]): Try[WdlArray] = extractObjects(params) map { WdlArray(WdlArrayType(WdlObjectType), _) }
   def read_string(params: Seq[Try[WdlValue]]): Try[WdlString] = readContentsFromSingleFileParameter(params).map(s => WdlString(s.trim))
@@ -39,10 +36,10 @@ trait WdlStandardLibraryFunctions extends WdlFunctions[WdlValue] {
     } yield WdlArray(WdlArrayType(WdlStringType), lines map WdlString)
   }
 
-  def read_map(params: Seq[Try[WdlValue]]): Try[WdlMap] = {
+  def read_map(params: Seq[Try[WdlValue]]): Try[WdlMap[WdlAnyType.type, WdlAnyType.type]] = {
     for {
       contents <- readContentsFromSingleFileParameter(params)
-      wdlMap <- WdlMap.fromTsv(contents)
+      wdlMap <- WdlMap.fromTsv(contents, WdlMapType(WdlAnyType, WdlAnyType))
     } yield wdlMap
   }
 
@@ -71,6 +68,73 @@ trait WdlStandardLibraryFunctions extends WdlFunctions[WdlValue] {
       files = glob(globPath(globVal), globVal)
       wdlFiles = files map { WdlFile(_, isGlob = false) }
     } yield WdlArray(WdlArrayType(WdlFileType), wdlFiles)
+  }
+
+  def transpose(params: Seq[Try[WdlValue]]): Try[WdlArray] = {
+    def extractExactlyOneArg: Try[WdlValue] = params.size match {
+      case 1 => params.head
+      case n => Failure(new IllegalArgumentException(s"Invalid number of parameters for engine function transpose: $n. Ensure transpose(x: Array[Array[X]]) takes exactly 1 parameters."))
+    }
+
+    case class ExpandedTwoDimensionalArray(innerType: WdlType, value: Seq[Seq[WdlValue]])
+    def validateAndExpand(value: WdlValue): Try[ExpandedTwoDimensionalArray] = value match {
+      case WdlArray(WdlArrayType(WdlArrayType(innerType)), array: Seq[WdlValue]) => expandWdlArray(array) map { ExpandedTwoDimensionalArray(innerType, _) }
+      case array @ WdlArray(WdlArrayType(nonArrayType), _) => Failure(new IllegalArgumentException(s"Array must be two-dimensional to be transposed but given array of $nonArrayType"))
+      case otherValue => Failure(new IllegalArgumentException(s"Function 'transpose' must be given a two-dimensional array but instead got ${otherValue.typeName}"))
+    }
+
+    def expandWdlArray(outerArray: Seq[WdlValue]): Try[Seq[Seq[WdlValue]]] = Try {
+      outerArray map {
+        case array: WdlArray => array.value
+        case otherValue => throw new IllegalArgumentException(s"Function 'transpose' must be given a two-dimensional array but instead got WdlArray[${otherValue.typeName}]")
+      }
+    }
+
+    def transpose(expandedTwoDimensionalArray: ExpandedTwoDimensionalArray): Try[WdlArray] = Try {
+      val innerType = expandedTwoDimensionalArray.innerType
+      val array = expandedTwoDimensionalArray.value
+      WdlArray(WdlArrayType(WdlArrayType(innerType)), array.transpose map { WdlArray(WdlArrayType(innerType), _) })
+    }
+
+    extractExactlyOneArg.flatMap(validateAndExpand).flatMap(transpose)
+  }
+
+  def range(params: Seq[Try[WdlValue]]): Try[WdlArray] = {
+    def extractAndValidateArguments = params.size match {
+      case 1 => validateArguments(params.head)
+      case n => Failure(new IllegalArgumentException(s"Invalid number of parameters for engine function range: $n. Ensure range(x: WdlInteger) takes exactly 1 parameters."))
+    }
+
+    def validateArguments(value: Try[WdlValue]) = value match {
+      case Success(intValue: WdlValue) if WdlIntegerType.isCoerceableFrom(intValue.wdlType) =>
+        Integer.valueOf(intValue.valueString) match {
+          case i if i >= 0 => Success(i)
+          case n => Failure(new IllegalArgumentException(s"Parameter to seq must be greater than or equal to 0 (but got $n)"))
+        }
+      case _ => Failure(new IllegalArgumentException(s"Invalid parameter for engine function seq: $value."))
+    }
+
+    extractAndValidateArguments map { intValue => WdlArray(WdlArrayType(WdlIntegerType), (0 until intValue).map(WdlInteger(_))) }
+  }
+
+  def sub(params: Seq[Try[WdlValue]]): Try[WdlString] = {
+    def extractArguments = params.size match {
+      case 3 => Success((params.head, params(1), params(2)))
+      case n => Failure(new IllegalArgumentException(s"Invalid number of parameters for engine function sub: $n. sub takes exactly 3 parameters."))
+    }
+
+    def validateArguments(values: (Try[WdlValue], Try[WdlValue], Try[WdlValue])) = values match {
+      case (Success(strValue), Success(WdlString(pattern)), Success(replaceValue))
+        if WdlStringType.isCoerceableFrom(strValue.wdlType) &&
+          WdlStringType.isCoerceableFrom(replaceValue.wdlType) =>
+        Success((strValue.valueString, pattern, replaceValue.valueString))
+      case _ => Failure(new IllegalArgumentException(s"Invalid parameters for engine function sub: $values."))
+    }
+
+    for {
+      args <- extractArguments
+      (str, pattern, replace) <- validateArguments(args)
+    } yield WdlString(pattern.r.replaceAllIn(str, replace))
   }
 
   /**

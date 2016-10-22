@@ -5,7 +5,7 @@ import spray.json.{JsNumber, JsString}
 
 import scala.util.{Try, Success}
 
-case object WdlIntegerType extends WdlPrimitiveType {
+case object WdlIntegerType extends WdlPrimitiveType[WdlIntegerType.type] {
   val toWdlString: String = "Int"
 
   override protected def coercion = {

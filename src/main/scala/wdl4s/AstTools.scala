@@ -59,7 +59,7 @@ object AstTools {
       }
     }
 
-    def wdlValue(wdlType: WdlType, wdlSyntaxErrorFormatter: WdlSyntaxErrorFormatter): WdlValue = {
+    def wdlValue[U](wdlType: WdlType[U], wdlSyntaxErrorFormatter: WdlSyntaxErrorFormatter): WdlValue[U] = {
 
       def astToMap(ast: Ast) = {
         val mapType = wdlType.asInstanceOf[WdlMapType]

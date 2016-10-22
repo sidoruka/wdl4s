@@ -13,7 +13,7 @@ object WdlFile {
   def apply(value: String, isGlob: Boolean = false): WdlFile = if (isGlob) WdlGlobFile(value) else WdlSingleFile(value)
 }
 
-sealed trait WdlFile extends WdlPrimitive {
+sealed trait WdlFile extends WdlTypedPrimitive[WdlFileType.type] {
   val value: String
   val wdlType: WdlType = WdlFileType
 

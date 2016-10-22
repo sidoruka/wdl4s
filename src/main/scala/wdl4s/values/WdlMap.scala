@@ -1,14 +1,14 @@
 package wdl4s.values
 
 import wdl4s.TsvSerializable
-import wdl4s.types.{WdlAnyType, WdlMapType, WdlPrimitiveType, WdlType}
+import wdl4s.types.{WdlMapType, WdlType}
 import wdl4s.util.{FileUtil, TryUtil}
 
 import scala.language.postfixOps
 import scala.util.{Failure, Success, Try}
 
 object WdlMap {
-  def coerceMap(m: Map[_, _], wdlMapType: WdlMapType): WdlMap = {
+  def coerceMap[A, B, K, V](m: Map[A, B], wdlMapType: WdlMapType[K, V]): WdlMap[K, V] = {
     val coerced = m map { case(k, v) => wdlMapType.keyType.coerceRawValue(k) -> wdlMapType.valueType.coerceRawValue(v) }
     val failures = coerced flatMap { case(k,v) => Seq(k,v) } collect { case f:Failure[_] => f }
     failures match {
@@ -16,18 +16,13 @@ object WdlMap {
         throw new UnsupportedOperationException(s"Failed to coerce one or more keys or values for creating a ${wdlMapType.toWdlString}:\n${TryUtil.stringifyFailures(f)}}")
       case _ =>
         val mapCoerced = coerced map { case (k, v) => k.get -> v.get }
-
-        // Yes, throw an exception if keyType or valueType can't be determined
-        val keyType = WdlType.homogeneousTypeFromValues(mapCoerced map { case (k, v) => k }).get
-        val valueType = WdlType.homogeneousTypeFromValues(mapCoerced map { case (k, v) => v }).get
-
-        WdlMap(WdlMapType(keyType, valueType), mapCoerced)
+        WdlMap(mapCoerced)
     }
   }
 
-  def fromTsv(tsv: String, wdlMapType: WdlMapType = WdlMapType(WdlAnyType, WdlAnyType)): Try[WdlMap] = {
+  def fromTsv[K <: WdlType, V <: WdlType](tsv: String, wdlMapType: WdlMapType[K, V]): Try[WdlMap[K, V]] = {
     FileUtil.parseTsv(tsv) match {
-      case Success(table) if table.isEmpty => Success(WdlMap(wdlMapType, Map.empty[WdlValue, WdlValue]))
+      case Success(table) if table.isEmpty => Success(WdlMap(Map.empty[WdlValue[K], WdlValue[V]]))
       case Success(table) if table.head.length != 2 => Failure(new UnsupportedOperationException("TSV must be 2 columns to convert to a Map"))
       case Success(table) => Try(coerceMap(table.map(row => row(0) -> row(1)).toMap, wdlMapType))
       case Failure(e) => Failure(e)
@@ -35,43 +30,26 @@ object WdlMap {
   }
 }
 
-case class WdlMap(wdlType: WdlMapType, value: Map[WdlValue, WdlValue]) extends WdlValue with TsvSerializable {
-  val typesUsedInKey = value.map { case (k,v) => k.wdlType }.toSet
-
-  if (typesUsedInKey.size == 1 && typesUsedInKey.head != wdlType.keyType)
-    throw new UnsupportedOperationException(s"Could not construct a $wdlType as this value: $value")
-
-  if (typesUsedInKey.size > 1)
-    throw new UnsupportedOperationException(s"Cannot construct $wdlType with mixed types: $value")
-
-  val typesUsedInValue = value.map { case (k,v) => v.wdlType }.toSet
-
-  if (typesUsedInValue.size == 1 && typesUsedInValue.head != wdlType.valueType)
-    throw new UnsupportedOperationException(s"Could not construct a $wdlType as this value: $value")
-
-  if (typesUsedInValue.size > 1)
-    throw new UnsupportedOperationException(s"Cannot construct $wdlType with mixed types: $value")
+case class WdlMap[K <: WdlType, V <: WdlType](value: Map[WdlValue[K], WdlValue[V]]) extends WdlValue[WdlMapType[K, V]] with TsvSerializable {
+  import wdl4s.types.WdlTypeImplicits._
+  val wdlType = implicitly[WdlMapType[K, V]]
 
   override def toWdlString: String =
     "{" + value.map {case (k,v) => s"${k.toWdlString}: ${v.toWdlString}"}.mkString(", ") + "}"
 
   def tsvSerialize: Try[String] = {
-    (wdlType.keyType, wdlType.valueType) match {
-      case (wdlTypeKey: WdlPrimitiveType, wdlTypeValue: WdlPrimitiveType) =>
-        Success(value.map({case (k, v) => s"${k.valueString}\t${v.valueString}"}).mkString("\n"))
-      case _ =>
-        Failure(new UnsupportedOperationException("Can only TSV serialize a Map[Primitive, Primitive]"))
+    if (this.isInstanceOf[WdlMap[_ <: WdlPrimitive, _ <: WdlPrimitive]]) {
+      Success(value.map({ case (k, v) => s"${k.valueString}\t${v.valueString}" }).mkString("\n"))
+    } else {
+      Failure(new UnsupportedOperationException("Can only TSV serialize a Map[Primitive, Primitive]"))
     }
   }
 
-  def map(f: PartialFunction[((WdlValue, WdlValue)), (WdlValue, WdlValue)]): WdlMap = {
-    value map f match {
-      case m: Map[WdlValue, WdlValue] if m.nonEmpty => WdlMap(WdlMapType(m.head._1.wdlType, m.head._2.wdlType), m)
-      case _ => this
-    }
+  def map[K2, V2](f: PartialFunction[((WdlValue[K], WdlValue[V])), (WdlValue[K2], WdlValue[V2])]): WdlMap[K2, V2] = {
+    WdlMap[K2, V2](value map f)
   }
 
-  override def collectAsSeq[T <: WdlValue](filterFn: PartialFunction[WdlValue, T]): Seq[T] = {
+  override def collectAsSeq[T <: WdlValue](filterFn: PartialFunction[WdlValue[_], T]): Seq[T] = {
     val collected = value flatMap {
       case (k, v) => Seq(k.collectAsSeq(filterFn), v.collectAsSeq(filterFn))
     }

@@ -6,21 +6,24 @@ import spray.json.JsArray
 
 import scala.util.{Failure, Success}
 
-case class WdlArrayType(memberType: WdlType) extends WdlType {
+case class WdlArrayType[M <: WdlType](memberType: WdlType[M]) extends WdlType[WdlArrayType[M]] {
   val toWdlString: String = s"Array[${memberType.toWdlString}]"
 
-  private def coerceIterable(values: Seq[Any]): WdlArray = values match {
+  private def coerceIterable(values: Seq[Any]): WdlArray[M] = values match {
     case s:Seq[Any] if s.nonEmpty =>
       val coerced = s.map {memberType.coerceRawValue(_).get}
-      WdlArray(WdlArrayType(coerced.head.wdlType), coerced)
-    case _ => WdlArray(WdlArrayType(memberType), Seq())
+      WdlArray(coerced)
+    case _ => WdlArray(Seq.empty[WdlValue[M]])
   }
 
   override protected def coercion = {
     case s: Seq[Any] => coerceIterable(s)
     case js: JsArray => coerceIterable(js.elements)
+    case wdlArray: WdlArray =>
+      val arrayType: WdlArrayType[_] = wdlArray.wdlType
+
     case wdlArray: WdlArray if wdlArray.wdlType.memberType == WdlStringType && memberType == WdlFileType =>
-      WdlArray(WdlArrayType(WdlFileType), wdlArray.value.map(str => WdlFile(str.asInstanceOf[WdlString].value)).toList)
+      WdlArray(wdlArray.value.map(str => WdlFile(str.asInstanceOf[WdlString].value)).toList)
     case wdlArray: WdlArray if wdlArray.wdlType.memberType == memberType => wdlArray
     case wdlArray: WdlArray if wdlArray.wdlType.memberType == WdlAnyType => coerceIterable(wdlArray.value)
     case wdlArray: WdlArray if wdlArray.wdlType.memberType.isInstanceOf[WdlArrayType] && memberType.isInstanceOf[WdlArrayType] =>
@@ -37,7 +40,7 @@ case class WdlArrayType(memberType: WdlType) extends WdlType {
       }
   }
 
-  override def isCoerceableFrom(otherType: WdlType): Boolean = otherType match {
+  override def isCoerceableFrom[V <: WdlType](otherType: WdlType[V]): Boolean = otherType match {
     case a: WdlArrayType => memberType.isCoerceableFrom(a.memberType)
     case _ => false
   }
@@ -45,7 +48,7 @@ case class WdlArrayType(memberType: WdlType) extends WdlType {
 
 object WdlArrayType {
 
-  implicit class WdlArrayEnhanced(wdlType: WdlType) extends WdlType {
+  implicit class WdlArrayEnhanced[U](wdlType: WdlType[U]) extends WdlType[U] {
 
     override protected def coercion: PartialFunction[Any, WdlValue] = wdlType.coercion
     override def toWdlString: String = wdlType.toWdlString

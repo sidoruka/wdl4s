@@ -61,7 +61,7 @@ object WdlObject {
 
 }
 
-case class WdlObject(value: Map[String, WdlValue]) extends WdlValue with WdlObjectLike with TsvSerializable {
+case class WdlObject(value: Map[String, WdlValue]) extends WdlTypedValue[WdlObjectType.type] with WdlObjectLike with TsvSerializable {
   val wdlType = WdlObjectType
 
   override def toWdlString: String =

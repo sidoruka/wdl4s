@@ -5,7 +5,7 @@ import wdl4s.types.WdlIntegerType
 
 import scala.util.{Failure, Success, Try}
 
-case class WdlInteger(value: Integer) extends WdlPrimitive {
+case class WdlInteger(value: Integer) extends WdlTypedPrimitive[WdlIntegerType.type] {
   val wdlType = WdlIntegerType
 
   override def add(rhs: WdlValue): Try[WdlValue] = rhs match {

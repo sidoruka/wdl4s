@@ -5,7 +5,7 @@ import wdl4s.types.WdlFloatType
 
 import scala.util.{Failure, Success, Try}
 
-case class WdlFloat(value: Double) extends WdlPrimitive {
+case class WdlFloat(value: Double) extends WdlTypedPrimitive[WdlFloatType.type] {
   val wdlType = WdlFloatType
   override def add(rhs: WdlValue): Try[WdlValue] = {
     rhs match {

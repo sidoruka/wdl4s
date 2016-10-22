@@ -1,7 +1,9 @@
 package wdl4s.types
 
-abstract class WdlPrimitiveType extends WdlType {
-  lazy val coercionMap: Map[WdlType, Seq[WdlType]] = Map(
+import wdl4s.values.{WdlBoolean, WdlFile, WdlFloat, WdlInteger, WdlString}
+
+abstract class WdlPrimitiveType[U <: WdlPrimitiveType] extends WdlType[U] {
+  lazy val coercionMap: Map[WdlType[_], Seq[WdlType[_]]] = Map(
     // From type -> To type
     WdlStringType -> Seq(WdlStringType, WdlIntegerType, WdlFloatType, WdlFileType, WdlBooleanType),
     WdlFileType -> Seq(WdlStringType, WdlFileType),
@@ -10,7 +12,7 @@ abstract class WdlPrimitiveType extends WdlType {
     WdlBooleanType -> Seq(WdlStringType, WdlBooleanType)
   )
 
-  override def isCoerceableFrom(otherType: WdlType): Boolean = {
+  override def isCoerceableFrom[V <: WdlType](otherType: WdlType[V]): Boolean = {
     coercionMap.get(otherType) match {
       case Some(types) => types contains this
       case None => false
@@ -18,3 +20,19 @@ abstract class WdlPrimitiveType extends WdlType {
   }
 }
 
+object WdlPrimitiveType {
+
+  val primitiveTypes = List(WdlBoolean, WdlFile, WdlFloat, WdlInteger, WdlString)
+
+  def tryMkTypeObject[T <: WdlType[T]]: Option[WdlPrimitiveType[T]] = {
+    primitiveTypes.collect {
+      case t: T with WdlPrimitiveType[T] => t
+    }.headOption
+  }
+
+  def mkTypeObject[T <: WdlPrimitiveType[T]]: T with WdlType[T] = {
+    (primitiveTypes collect {
+      case t: T with WdlType[T] => t
+    }).head
+  }
+}

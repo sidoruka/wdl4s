@@ -1,3 +1,5 @@
 package wdl4s.values
 
-trait WdlPrimitive extends WdlValue
+import wdl4s.types.WdlType
+
+trait WdlPrimitive[T <: WdlType[T]] extends WdlValue[T]

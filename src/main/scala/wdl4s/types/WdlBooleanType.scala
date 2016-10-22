@@ -5,7 +5,7 @@ import spray.json.{JsBoolean, JsString}
 
 import scala.util.{Try, Success}
 
-case object WdlBooleanType extends WdlPrimitiveType {
+case object WdlBooleanType extends WdlPrimitiveType[WdlBooleanType.type] with WdlType[WdlBooleanType.type] {
   val toWdlString: String = "Boolean"
 
   override protected def coercion = {

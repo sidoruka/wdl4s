@@ -2,7 +2,7 @@ package wdl4s.types
 
 import wdl4s.values.WdlValue
 
-case object WdlAnyType extends WdlType {
+case object WdlAnyType extends WdlType[WdlAnyType.type] {
   val toWdlString: String = s"Any"
 
   /**

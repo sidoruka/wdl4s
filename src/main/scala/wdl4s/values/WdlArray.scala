@@ -1,20 +1,23 @@
 package wdl4s.values
 
 import wdl4s.TsvSerializable
-import wdl4s.types.{WdlStringType, WdlArrayType, WdlObjectType, WdlPrimitiveType}
+import wdl4s.types._
 
 import scala.language.postfixOps
 import scala.util.{Failure, Success, Try}
 
 object WdlArray {
-  def fromTsv(tsv: String): WdlArray = {
-    WdlArray(WdlArrayType(WdlArrayType(WdlStringType)), tsv.replaceAll("[\r\n]+$", "").split("[\n\r]+").toSeq map { line =>
-      WdlArray(WdlArrayType(WdlStringType), line.split("\t").toSeq.map(WdlString))
+  def fromTsv(tsv: String): WdlArray[WdlStringType.type] = {
+    WdlArray[WdlStringType.type](tsv.replaceAll("[\r\n]+$", "").split("[\n\r]+").toSeq map { line =>
+      WdlArray[WdlStringType.type](line.split("\t").toSeq.map(WdlString))
     })
   }
 }
 
-case class WdlArray(wdlType: WdlArrayType, value: Seq[WdlValue]) extends WdlValue with TsvSerializable {
+case class WdlArray[A <: WdlType](value: Seq[WdlValue[A]]) extends WdlValue[WdlArrayType[A]] with TsvSerializable {
+  import wdl4s.types.WdlTypeImplicits._
+  val wdlType: WdlArrayType[A] = implicitly[WdlArrayType[A]]
+
   val typesUsedInValue = Set(value map {_.wdlType}: _*)
   if (typesUsedInValue.size == 1 && typesUsedInValue.head != wdlType.memberType) {
     throw new UnsupportedOperationException(s"Could not construct array of type $wdlType with this value: $value")
@@ -26,10 +29,10 @@ case class WdlArray(wdlType: WdlArrayType, value: Seq[WdlValue]) extends WdlValu
   override def toWdlString: String = s"[${value.map(_.toWdlString).mkString(", ")}]"
   override def toString = toWdlString
 
-  def map[R <: WdlValue](f: WdlValue => R): WdlArray = {
-    value.map{f} match {
-      case s: Seq[R] if s.nonEmpty => WdlArray(WdlArrayType(s.head.wdlType), s)
-      case _ => this
+  def map[V, R <: WdlTypedValue[V]](f: WdlTypedValue[A] => R): WdlArray = {
+    value map { f(_) } match {
+      case s: Seq[R] if s.nonEmpty => WdlArray(WdlArrayType[R](s.head.wdlType), s)
+      case _ => WdlArray[R](WdlArrayType[R], Seq.empty)
     }
   }
 
