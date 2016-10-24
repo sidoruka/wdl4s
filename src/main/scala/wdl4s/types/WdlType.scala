@@ -10,7 +10,7 @@ import scala.util.{Failure, Success, Try}
 
 class WdlTypeException(message: String) extends RuntimeException(message)
 
-trait WdlType[U <: WdlType[U]] {
+trait WdlType[U <: WdlType[U]] { this: U =>
 
   /**
    * Method to be overridden by implementation classes defining a partial function
@@ -44,7 +44,7 @@ trait WdlType[U <: WdlType[U]] {
    * @return The WdlValue
    */
   //TODO: return a Try ?
-  def fromWdlString(wdlSource: WdlSource): WdlValue = {
+  def fromWdlString(wdlSource: WdlSource): WdlValue[U] = {
     val tokens = WdlType.parser.lex(wdlSource, "string")
     val terminalMap = tokens.asScala.toVector.map {(_, wdlSource)}.toMap
     val wdlSyntaxErrorFormatter = new WdlSyntaxErrorFormatter(terminalMap)

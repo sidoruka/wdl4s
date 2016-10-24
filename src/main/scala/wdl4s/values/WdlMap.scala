@@ -1,7 +1,7 @@
 package wdl4s.values
 
 import wdl4s.TsvSerializable
-import wdl4s.types.{WdlMapType, WdlType}
+import wdl4s.types.{WdlMapType, WdlPrimitiveType, WdlType}
 import wdl4s.util.{FileUtil, TryUtil}
 
 import scala.language.postfixOps
@@ -30,9 +30,12 @@ object WdlMap {
   }
 }
 
-case class WdlMap[K <: WdlType, V <: WdlType](value: Map[WdlValue[K], WdlValue[V]]) extends WdlValue[WdlMapType[K, V]] with TsvSerializable {
-  import wdl4s.types.WdlTypeImplicits._
-  val wdlType = implicitly[WdlMapType[K, V]]
+case class WdlMap[K <: WdlPrimitiveType[K], V <: WdlType[V]](value: Map[WdlValue[K], WdlValue[V]]) extends WdlValue[WdlMapType[K, V]] with TsvSerializable {
+
+  val wdlType = {
+    import wdl4s.types.WdlTypeImplicits._
+    implicitly[WdlMapType[K, V]]
+  }
 
   override def toWdlString: String =
     "{" + value.map {case (k,v) => s"${k.toWdlString}: ${v.toWdlString}"}.mkString(", ") + "}"
@@ -51,7 +54,7 @@ case class WdlMap[K <: WdlType, V <: WdlType](value: Map[WdlValue[K], WdlValue[V
 
   override def collectAsSeq[T <: WdlValue](filterFn: PartialFunction[WdlValue[_], T]): Seq[T] = {
     val collected = value flatMap {
-      case (k, v) => Seq(k.collectAsSeq(filterFn), v.collectAsSeq(filterFn))
+      case (k: WdlValue[K], v: WdlValue[V]) => k.collectAsSeq(filterFn) ++ v.collectAsSeq(filterFn)
     }
     collected.flatten.toSeq
   }

@@ -2,7 +2,7 @@ package wdl4s.types
 
 import wdl4s.values.{WdlBoolean, WdlFile, WdlFloat, WdlInteger, WdlString}
 
-abstract class WdlPrimitiveType[U <: WdlPrimitiveType] extends WdlType[U] {
+abstract class WdlPrimitiveType[U <: WdlPrimitiveType[U]] extends WdlType[U] with U { this: WdlPrimitiveType[U] =>
   lazy val coercionMap: Map[WdlType[_], Seq[WdlType[_]]] = Map(
     // From type -> To type
     WdlStringType -> Seq(WdlStringType, WdlIntegerType, WdlFloatType, WdlFileType, WdlBooleanType),

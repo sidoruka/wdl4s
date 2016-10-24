@@ -5,7 +5,7 @@ import spray.json.JsString
 
 import scala.util.{Success, Try}
 
-case object WdlFileType extends WdlPrimitiveType[WdlFileType.type] with WdlType[WdlFileType.type] {
+case object WdlFileType extends WdlPrimitiveType[WdlFileType.type] { this: WdlPrimitiveType[WdlFileType.type] =>
   val toWdlString: String = "File"
 
   override protected def coercion = {

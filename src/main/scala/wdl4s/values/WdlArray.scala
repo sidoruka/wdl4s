@@ -7,16 +7,16 @@ import scala.language.postfixOps
 import scala.util.{Failure, Success, Try}
 
 object WdlArray {
-  def fromTsv(tsv: String): WdlArray[WdlStringType.type] = {
-    WdlArray[WdlStringType.type](tsv.replaceAll("[\r\n]+$", "").split("[\n\r]+").toSeq map { line =>
-      WdlArray[WdlStringType.type](line.split("\t").toSeq.map(WdlString))
-    })
+  def fromTsv(tsv: String): WdlArray[WdlArrayType[WdlStringType.type]] = {
+    WdlArray(tsv.replaceAll("[\r\n]+$", "").split("[\n\r]+").toSeq map { line => WdlArray(line.split("\t").toSeq.map(WdlString)) })
   }
 }
 
 case class WdlArray[A <: WdlType](value: Seq[WdlValue[A]]) extends WdlValue[WdlArrayType[A]] with TsvSerializable {
-  import wdl4s.types.WdlTypeImplicits._
-  val wdlType: WdlArrayType[A] = implicitly[WdlArrayType[A]]
+  val wdlType: WdlArrayType[A] = {
+    import wdl4s.types.WdlTypeImplicits._
+    implicitly[WdlArrayType[A]]
+  }
 
   val typesUsedInValue = Set(value map {_.wdlType}: _*)
   if (typesUsedInValue.size == 1 && typesUsedInValue.head != wdlType.memberType) {
@@ -29,12 +29,7 @@ case class WdlArray[A <: WdlType](value: Seq[WdlValue[A]]) extends WdlValue[WdlA
   override def toWdlString: String = s"[${value.map(_.toWdlString).mkString(", ")}]"
   override def toString = toWdlString
 
-  def map[V, R <: WdlTypedValue[V]](f: WdlTypedValue[A] => R): WdlArray = {
-    value map { f(_) } match {
-      case s: Seq[R] if s.nonEmpty => WdlArray(WdlArrayType[R](s.head.wdlType), s)
-      case _ => WdlArray[R](WdlArrayType[R], Seq.empty)
-    }
-  }
+  def map[T](f: WdlValue[A] => WdlValue[T]): WdlArray[T] = WdlArray(value map f)
 
   def tsvSerialize: Try[String] = {
     wdlType.memberType match {
@@ -49,7 +44,7 @@ case class WdlArray[A <: WdlType](value: Seq[WdlValue[A]]) extends WdlValue[WdlA
     }
   }
 
-  override def collectAsSeq[T <: WdlValue](filterFn: PartialFunction[WdlValue, T]): Seq[T] = {
+  override def collectAsSeq[T <: WdlValue[_]](filterFn: PartialFunction[WdlValue[_], T]): Seq[T] = {
     value flatMap { _.collectAsSeq(filterFn) }
   }
 }

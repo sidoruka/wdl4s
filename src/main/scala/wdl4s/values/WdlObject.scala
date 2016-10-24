@@ -6,7 +6,7 @@ import wdl4s.util.FileUtil
 import scala.util.{Failure, Success, Try}
 
 trait WdlObjectLike {
-  def value: Map[String, WdlValue]
+  def value: Map[String, WdlValue[_]]
 }
 
 object WdlObject {
@@ -61,7 +61,7 @@ object WdlObject {
 
 }
 
-case class WdlObject(value: Map[String, WdlValue]) extends WdlTypedValue[WdlObjectType.type] with WdlObjectLike with TsvSerializable {
+case class WdlObject(value: Map[String, WdlValue[_]]) extends WdlValue[WdlObjectType.type] with WdlObjectLike with TsvSerializable {
   val wdlType = WdlObjectType
 
   override def toWdlString: String =

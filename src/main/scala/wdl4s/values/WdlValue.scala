@@ -42,7 +42,5 @@ trait WdlValue[T <: WdlType[T]] {
    */
   def valueString: String = toWdlString
 
-  def collectAsSeq[U <: WdlValue](filterFn: PartialFunction[WdlValue[_], U]): Seq[U] = {
-    if (filterFn.isDefinedAt(this)) Seq(filterFn(this)) else Nil
-  }
+  def collectAsSeq[U <: WdlValue[_]](filterFn: PartialFunction[WdlValue[_], U]): Seq[U] = { Seq(this) collect filterFn }
 }

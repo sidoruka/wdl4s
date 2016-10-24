@@ -14,7 +14,7 @@ object WdlBoolean {
 /** The constructor is private to force access through the companion
   * object `apply` which ensures the use of one of the canonical instances.
   */
-class WdlBoolean private(val value: Boolean) extends WdlPrimitive[WdlBooleanType.type] {
+class WdlBoolean private(val value: Boolean) extends WdlPrimitive[WdlBooleanType.type] with WdlValue[WdlBooleanType.type] {
   val wdlType = WdlBooleanType
 
   override def equals(rhs: WdlValue): Try[WdlBoolean] = rhs match {

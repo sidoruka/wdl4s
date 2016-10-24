@@ -2,7 +2,7 @@ package wdl4s.types
 
 import wdl4s.values.{WdlPair, WdlValue}
 
-case class WdlPairType[L <: WdlType[L], R <: WdlType[R]](leftType: L, rightType: R) extends WdlType {
+case class WdlPairType[L <: WdlType[L], R <: WdlType[R]](leftType: L, rightType: R) extends WdlType[WdlPairType[L, R]] {
 
   override def isCoerceableFrom[O](otherType: WdlType[O]): Boolean = otherType match {
     case WdlPairType(otherType1, otherType2) => leftType.isCoerceableFrom(otherType1) && rightType.isCoerceableFrom(otherType2)
@@ -16,10 +16,9 @@ case class WdlPairType[L <: WdlType[L], R <: WdlType[R]](leftType: L, rightType:
     * the partial function is not defined are assumed to not be convertible to the target type.
     */
   override protected def coercion: PartialFunction[Any, WdlValue] = {
-    case otherPair @ WdlPair(otherValue1, otherValue2) if isCoerceableFrom(otherPair.wdlType) => {
+    case otherPair @ WdlPair(otherValue1, otherValue2) if isCoerceableFrom(otherPair.wdlType) =>
       WdlPair(leftType.coerceRawValue(otherValue1).get, rightType.coerceRawValue(otherValue2).get)
-    }
   }
 
-  override def toWdlString: String = ???
+  override def toWdlString: String = s"Pair[${leftType.toWdlString}, ${rightType.toWdlString}]"
 }

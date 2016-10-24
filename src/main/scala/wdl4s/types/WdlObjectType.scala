@@ -6,7 +6,7 @@ import spray.json.JsObject
 
 import scala.util.{Try, Failure, Success}
 
-case object WdlObjectType extends WdlType {
+case object WdlObjectType extends WdlType[WdlObjectType.type] {
   val toWdlString: String = "Object"
 
   private def handleCoercionFailures(tries: Try[_]*) = {

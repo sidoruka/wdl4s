@@ -10,6 +10,7 @@ import wdl4s.values._
 
 import scala.collection.JavaConverters._
 import scala.language.postfixOps
+import scala.util.Try
 
 object AstTools {
   implicit class EnhancedAstNode(val astNode: AstNode) extends AnyVal {
@@ -27,8 +28,8 @@ object AstTools {
     }
     def findTopLevelMemberAccesses(): Iterable[Ast] = AstTools.findTopLevelMemberAccesses(astNode)
     def sourceString: String = astNode.asInstanceOf[Terminal].getSourceString
-    def astListAsVector(): Seq[AstNode] = astNode.asInstanceOf[AstList].asScala.toVector
-    def wdlType(wdlSyntaxErrorFormatter: WdlSyntaxErrorFormatter): WdlType = {
+    def astListAsVector: Seq[AstNode] = astNode.asInstanceOf[AstList].asScala.toVector
+    def wdlType(wdlSyntaxErrorFormatter: WdlSyntaxErrorFormatter): WdlType[_] = {
       astNode match {
         case t: Terminal =>
           t.getSourceString match {
@@ -41,7 +42,7 @@ object AstTools {
             case "Array" => throw new SyntaxError(wdlSyntaxErrorFormatter.arrayMustHaveATypeParameter(t))
           }
         case a: Ast =>
-          val subtypes = a.getAttribute("subtype").astListAsVector()
+          val subtypes = a.getAttribute("subtype").astListAsVector
           val typeTerminal = a.getAttribute("name").asInstanceOf[Terminal]
           a.getAttribute("name").sourceString match {
             case "Array" =>
@@ -61,47 +62,49 @@ object AstTools {
 
     def wdlValue[U](wdlType: WdlType[U], wdlSyntaxErrorFormatter: WdlSyntaxErrorFormatter): WdlValue[U] = {
 
-      def astToMap(ast: Ast) = {
-        val mapType = wdlType.asInstanceOf[WdlMapType]
-        val elements = ast.getAttribute("map").asInstanceOf[AstList].asScala.toVector.map({ kvnode =>
-          val k = kvnode.asInstanceOf[Ast].getAttribute("key").wdlValue(mapType.keyType, wdlSyntaxErrorFormatter)
-          val v = kvnode.asInstanceOf[Ast].getAttribute("value").wdlValue(mapType.valueType, wdlSyntaxErrorFormatter)
-          k -> v
-        }).toMap
+//      def astToMap(ast: Ast) = {
+//        val mapType = wdlType.asInstanceOf[WdlMapType]
+//        val elements = ast.getAttribute("map").asInstanceOf[AstList].asScala.toVector.map({ kvnode =>
+//          val k = kvnode.asInstanceOf[Ast].getAttribute("key").wdlValue(mapType.keyType, wdlSyntaxErrorFormatter)
+//          val v = kvnode.asInstanceOf[Ast].getAttribute("value").wdlValue(mapType.valueType, wdlSyntaxErrorFormatter)
+//          k -> v
+//        }).toMap
+//
+//        WdlMap(elements)
+//      }
+//
+//      def astToObject(ast: Ast) = {
+//        val elements = ast.getAttribute("map").asInstanceOf[AstList].asScala.toVector.map({ kvnode =>
+//          val k = kvnode.asInstanceOf[Ast].getAttribute("key").sourceString
+//          val v = kvnode.asInstanceOf[Ast].getAttribute("value").wdlValue(WdlStringType, wdlSyntaxErrorFormatter)
+//          k -> v
+//        }).toMap
+//
+//        WdlObject(elements)
+//      }
 
-        WdlMap(mapType, elements)
-      }
+      import wdl4s.values.WdlValueImplicits._
+      val maker = implicitly[AstNode => Try[WdlValue[U]]]
+      maker.apply(astNode).get
 
-      def astToObject(ast: Ast) = {
-        val elements = ast.getAttribute("map").asInstanceOf[AstList].asScala.toVector.map({ kvnode =>
-          val k = kvnode.asInstanceOf[Ast].getAttribute("key").sourceString
-          val v = kvnode.asInstanceOf[Ast].getAttribute("value").wdlValue(WdlStringType, wdlSyntaxErrorFormatter)
-          k -> v
-        }).toMap
-
-        WdlObject(elements)
-      }
-
-      astNode match {
-        case t: Terminal if t.getTerminalStr == "string" && wdlType == WdlStringType => WdlString(t.getSourceString)
-        case t: Terminal if t.getTerminalStr == "string" && wdlType == WdlFileType => WdlFile(t.getSourceString)
-        case t: Terminal if t.getTerminalStr == "integer" && wdlType == WdlIntegerType => WdlInteger(t.getSourceString.toInt)
-        case t: Terminal if t.getTerminalStr == "float" && wdlType == WdlFloatType => WdlFloat(t.getSourceString.toDouble)
-        case t: Terminal if t.getTerminalStr == "boolean" && wdlType == WdlBooleanType => t.getSourceString.toLowerCase match {
-          case "true" => WdlBoolean.True
-          case "false" => WdlBoolean.False
-        }
-        // TODO: The below cases, ArrayLiteral and MapLiteral, ObjectLiteral are brittle. They recursively call this wdlValue().
-        // However, those recursive calls might contain full-on expressions instead of just other literals.  This
-        // whole thing ought to be part of the regular expression evaluator, though I imagine that's non-trivial.
-        case a: Ast if a.getName == "ArrayLiteral" && wdlType.isInstanceOf[WdlArrayType] =>
-          val arrType = wdlType.asInstanceOf[WdlArrayType]
-          val elements = a.getAttribute("values").astListAsVector map {node => node.wdlValue(arrType.memberType, wdlSyntaxErrorFormatter)}
-          WdlArray(arrType, elements)
-        case a: Ast if a.getName == "MapLiteral" && wdlType.isInstanceOf[WdlMapType] => astToMap(a)
-        case a: Ast if a.getName == "ObjectLiteral" && wdlType == WdlObjectType => astToObject(a)
-        case _ => throw new SyntaxError(s"Could not convert AST to a $wdlType (${Option(astNode).getOrElse("No AST").toString})")
-      }
+//      astNode match {
+//        case t: Terminal if t.getTerminalStr == "string" && wdlType == WdlStringType => implicitly[String => WdlValue[U]].apply(t.getSourceString)
+//        case t: Terminal if t.getTerminalStr == "string" && wdlType == WdlFileType =>  implicitly[String => WdlValue[U]].apply(t.getSourceString)
+//        case t: Terminal if t.getTerminalStr == "integer" && wdlType == WdlIntegerType => implicitly[Int => WdlValue[U]].apply(t.getSourceString.toInt)
+//        case t: Terminal if t.getTerminalStr == "float" && wdlType == WdlFloatType => implicitly[Double => WdlValue[U]].apply(t.getSourceString.toDouble)
+//        case t: Terminal if t.getTerminalStr == "boolean" && wdlType == WdlBooleanType => implicitly[String => WdlValue[U]].apply(t.getSourceString.toLowerCase)
+//
+//        // TODO: The below cases, ArrayLiteral and MapLiteral, ObjectLiteral are brittle. They recursively call this wdlValue().
+//        // However, those recursive calls might contain full-on expressions instead of just other literals.  This
+//        // whole thing ought to be part of the regular expression evaluator, though I imagine that's non-trivial.
+//        case a: Ast if a.getName == "ArrayLiteral" && wdlType.isInstanceOf[WdlArrayType] =>
+//          val arrType = wdlType.asInstanceOf[WdlArrayType]
+//          val elements = a.getAttribute("values").astListAsVector map {node => node.wdlValue(arrType.memberType, wdlSyntaxErrorFormatter)}
+//          WdlArray(elements)
+//        case a: Ast if a.getName == "MapLiteral" && wdlType.isInstanceOf[WdlMapType] => astToMap(a)
+//        case a: Ast if a.getName == "ObjectLiteral" && wdlType == WdlObjectType => astToObject(a)
+//        case _ => throw new SyntaxError(s"Could not convert AST to a $wdlType (${Option(astNode).getOrElse("No AST").toString})")
+//      }
     }
   }
 
@@ -144,7 +147,7 @@ object AstTools {
    * @return an Abstract Syntax Tree (WdlParser.Ast) representing the structure of the code
    * @throws WdlParser.SyntaxError if there was a problem parsing the source code
    */
-  def getAst(wdlFile: Path): Ast = getAst(File(wdlFile).contentAsString, File(wdlFile).name)
+  def getAst(wdlFile: Path): Ast = getAst(File(wdlFile.toString).contentAsString, File(wdlFile.toString).name)
 
   def findAsts(ast: AstNode, name: String): Seq[Ast] = {
     ast match {
@@ -216,7 +219,7 @@ object AstTools {
       case asts: Seq[Ast] if asts.isEmpty => Seq.empty[Ast]
       case asts: Seq[Ast] =>
         /* Uses of .head here are assumed by the above code that ensures that there are no empty maps */
-        val secondInputSectionIOMappings = asts(1).getAttribute("map").astListAsVector()
+        val secondInputSectionIOMappings = asts(1).getAttribute("map").astListAsVector
         val firstKeyTerminal = secondInputSectionIOMappings.head.asInstanceOf[Ast].getAttribute("key").asInstanceOf[Terminal]
         throw new SyntaxError(wdlSyntaxErrorFormatter.multipleInputStatementsOnCall(firstKeyTerminal))
     }

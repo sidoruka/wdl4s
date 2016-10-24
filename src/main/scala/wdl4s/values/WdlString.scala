@@ -2,9 +2,10 @@ package wdl4s.values
 
 import wdl4s.types.WdlStringType
 import org.apache.commons.lang3.StringEscapeUtils
+
 import scala.util.{Success, Try}
 
-case class WdlString(value: String) extends WdlTypedPrimitive[WdlStringType.type] {
+case class WdlString(value: String) extends WdlPrimitive[WdlStringType.type] with WdlValue[WdlStringType.type] {
   val wdlType = WdlStringType
 
   override def add(rhs: WdlValue): Try[WdlValue] = rhs match {
