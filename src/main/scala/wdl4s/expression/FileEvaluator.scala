@@ -115,7 +115,7 @@ case class FileEvaluator(valueEvaluator: ValueEvaluator, coerceTo: WdlType = Wdl
       case a: Ast if a.isArrayOrMapLookup =>
         evalValue(a) match {
           case Success(f: WdlFile) => Success(Seq(f))
-          case _ => evaluateRecursive(a.getAttribute("rhs"))
+          case _ => evaluateRecursive(a.getAttribute("lhs"))
         }
       case a: Ast if a.isMemberAccess =>
         evalValue(a) match {

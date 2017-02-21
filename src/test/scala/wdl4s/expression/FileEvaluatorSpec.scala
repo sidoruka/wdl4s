@@ -45,6 +45,7 @@ class FileEvaluatorSpec extends FlatSpec with Matchers {
     (""" [read_string("x"), read_string("y")] """, Seq(WdlSingleFile("x"), WdlSingleFile("y")), WdlArrayType(WdlStringType)),
     (""" {read_int("a"): read_string("x"), 4: read_string("y")} """, Seq(WdlSingleFile("a"), WdlSingleFile("x"), WdlSingleFile("y")), WdlArrayType(WdlStringType)),
     (""" glob("out-*.txt") """, Seq(WdlGlobFile("out-*.txt")), WdlFileType),
+    (""" glob("out-*.txt")[0] """, Seq(WdlGlobFile("out-*.txt")), WdlFileType),
     (""" read_tsv("my_file") """, Seq(WdlSingleFile("my_file")), WdlFileType)
   )
 
